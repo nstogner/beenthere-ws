@@ -39,11 +39,12 @@ func NewHandler(visits *VisitClient) *Handler {
 	// Register all http routes. Note: plural names are used to adhere with
 	// RESTful conventions.
 	rtr := httprouter.New()
-	rtr.GET("/states/:st/cities", h.wrap(h.GetCities))
-	rtr.POST("/users/:usr/visits", h.wrap(h.PostUserVisit))
-	rtr.DELETE("/users/:usr/visits/:vis", h.wrap(h.DeleteUserVisit))
-	rtr.GET("/users/:usr/visits", h.wrap(h.GetUserCities))
-	rtr.GET("/users/:usr/visits/states", h.wrap(h.GetUserStates))
+	rtr.GET("/states/:state/cities", h.wrap(h.GetCities))
+	rtr.POST("/users/:user/visits", h.wrap(h.PostUserVisit))
+	rtr.DELETE("/users/:user/visits/:visit", h.wrap(h.DeleteVisit))
+	rtr.GET("/users/:user/visits", h.wrap(h.GetVisits))
+	rtr.GET("/users/:user/visits/cities", h.wrap(h.GetCitiesVisited))
+	rtr.GET("/users/:user/visits/states", h.wrap(h.GetStatesVisited))
 	h.router = rtr
 
 	return h
@@ -62,7 +63,7 @@ func (h *Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 func (h *Handler) GetCities(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
-	stateId := ps.ByName("st")
+	stateId := ps.ByName("state")
 
 	_ = stateId
 
@@ -71,7 +72,7 @@ func (h *Handler) GetCities(ctx context.Context, res http.ResponseWriter, req *h
 
 func (h *Handler) PostUserVisit(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
-	userId := ps.ByName("usr")
+	userId := ps.ByName("user")
 
 	// Grab the visit details from the http body.
 	visit := NewVisit()
@@ -96,9 +97,9 @@ func (h *Handler) PostUserVisit(ctx context.Context, res http.ResponseWriter, re
 	return nil
 }
 
-func (h *Handler) DeleteUserVisit(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
+func (h *Handler) DeleteVisit(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
-	visitId := ps.ByName("vis")
+	visitId := ps.ByName("visit")
 
 	// Delete the visit from the database.
 	if err := h.visits.Delete(visitId); err != nil {
@@ -109,25 +110,39 @@ func (h *Handler) DeleteUserVisit(ctx context.Context, res http.ResponseWriter, 
 	return nil
 }
 
-func (h *Handler) GetUserCities(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
+func (h *Handler) GetVisits(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
-	userId := ps.ByName("usr")
+	userId := ps.ByName("user")
 
-	states, err := h.visits.GetFields(userId, "city")
+	cities, err := h.visits.GetVisits(userId)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}
 
 	rsp := contentware.ResponseTypeFromCtx(ctx)
-	rsp.Encode(res, states)
+	rsp.Encode(res, cities)
 	return nil
 }
 
-func (h *Handler) GetUserStates(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
+func (h *Handler) GetCitiesVisited(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
-	userId := ps.ByName("usr")
+	userId := ps.ByName("user")
 
-	states, err := h.visits.GetFields(userId, "state")
+	cities, err := h.visits.GetCities(userId)
+	if err != nil {
+		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
+	}
+
+	rsp := contentware.ResponseTypeFromCtx(ctx)
+	rsp.Encode(res, cities)
+	return nil
+}
+
+func (h *Handler) GetStatesVisited(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
+	ps := routeradapt.ParamsFromCtx(ctx)
+	userId := ps.ByName("user")
+
+	states, err := h.visits.GetStates(userId)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}

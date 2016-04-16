@@ -1,4 +1,4 @@
-package beenthere
+package main
 
 import (
 	"net/http"
@@ -6,9 +6,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/nstogner/httpware"
 	"github.com/nstogner/httpware/contentware"
-	"github.com/nstogner/httpware/errorware"
-	"github.com/nstogner/httpware/httpctx"
-	"github.com/nstogner/httpware/httperr"
 	"github.com/nstogner/httpware/logware"
 	"github.com/nstogner/httpware/routeradapt"
 	"golang.org/x/net/context"
@@ -29,9 +26,8 @@ func NewHandler(visits *VisitClient) *Handler {
 	}
 
 	// Configure any needed middleware.
-	h.middleware = httpware.MustCompose(
+	h.middleware = httpware.Compose(
 		contentware.New(contentware.Defaults),
-		errorware.New(errorware.Defaults),
 		logware.New(logware.Config{
 			Logger:    log,
 			Headers:   []string{},
@@ -40,13 +36,14 @@ func NewHandler(visits *VisitClient) *Handler {
 		}),
 	)
 
-	// Register all http routes.
+	// Register all http routes. Note: plural names are used to adhere with
+	// RESTful conventions.
 	rtr := httprouter.New()
-	rtr.GET("/state/:st/cities", h.wrap(h.GetCities))
-	rtr.POST("/user/:usr/visits", h.wrap(h.PostUserVisit))
-	rtr.DELETE("/user/:usr/visit/:vis", h.wrap(h.DeleteUserVisit))
-	rtr.GET("/user/:usr/visits", h.wrap(h.GetUserCities))
-	rtr.GET("/user/:usr/visits/states", h.wrap(h.GetUserStates))
+	rtr.GET("/states/:st/cities", h.wrap(h.GetCities))
+	rtr.POST("/users/:usr/visits", h.wrap(h.PostUserVisit))
+	rtr.DELETE("/users/:usr/visits/:vis", h.wrap(h.DeleteUserVisit))
+	rtr.GET("/users/:usr/visits", h.wrap(h.GetUserCities))
+	rtr.GET("/users/:usr/visits/states", h.wrap(h.GetUserStates))
 	h.router = rtr
 
 	return h
@@ -54,7 +51,7 @@ func NewHandler(visits *VisitClient) *Handler {
 
 // wrap applies middleware to a handler function and returns a handler
 // function which is compatible with httprouter.
-func (h *Handler) wrap(hf httpctx.HandlerFunc) httprouter.Handle {
+func (h *Handler) wrap(hf httpware.HandlerFunc) httprouter.Handle {
 	return routeradapt.Adapt(h.middleware.ThenFunc(hf))
 }
 
@@ -80,27 +77,35 @@ func (h *Handler) PostUserVisit(ctx context.Context, res http.ResponseWriter, re
 	visit := NewVisit()
 	rqt := contentware.RequestTypeFromCtx(ctx)
 	if err := rqt.Decode(req.Body, visit); err != nil {
-		return httperr.New("unable to parse body: "+err.Error(), http.StatusBadRequest)
+		return httpware.NewErr("unable to parse body: "+err.Error(), http.StatusBadRequest)
 	}
 	if err := h.visits.Validate(visit); err != nil {
-		return httperr.New("invalid visit", http.StatusBadRequest).WithField("invalid", err.Error())
+		return httpware.NewErr("invalid visit", http.StatusBadRequest).WithField("invalid", err.Error())
 	}
+	visit.User = userId
 
 	// Save the visit to the database.
-	if err := h.visits.AddUserVisit(userId, visit); err != nil {
-		// TODO: Make sure that this wont send the error to the client.
-		return httperr.New("unable to save user visit", http.StatusInternalServerError).WithField("error", err.Error())
+	if err := h.visits.Add(visit); err != nil {
+		return httpware.NewErr("unable to save user visit", http.StatusInternalServerError).WithField("error", err.Error())
 	}
+
+	// Pass the saved entity back to the client.
+	rst := contentware.ResponseTypeFromCtx(ctx)
+	rst.Encode(res, visit)
 
 	return nil
 }
 
 func (h *Handler) DeleteUserVisit(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
-	userId := ps.ByName("usr")
+	visitId := ps.ByName("vis")
 
-	_ = userId
+	// Delete the visit from the database.
+	if err := h.visits.Delete(visitId); err != nil {
+		return httpware.NewErr("unable to delete user visit", http.StatusInternalServerError).WithField("error", err.Error())
+	}
 
+	res.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
@@ -108,8 +113,13 @@ func (h *Handler) GetUserCities(ctx context.Context, res http.ResponseWriter, re
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("usr")
 
-	_ = userId
+	states, err := h.visits.GetFields(userId, "city")
+	if err != nil {
+		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
+	}
 
+	rsp := contentware.ResponseTypeFromCtx(ctx)
+	rsp.Encode(res, states)
 	return nil
 }
 
@@ -117,7 +127,12 @@ func (h *Handler) GetUserStates(ctx context.Context, res http.ResponseWriter, re
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("usr")
 
-	_ = userId
+	states, err := h.visits.GetFields(userId, "state")
+	if err != nil {
+		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
+	}
 
+	rsp := contentware.ResponseTypeFromCtx(ctx)
+	rsp.Encode(res, states)
 	return nil
 }

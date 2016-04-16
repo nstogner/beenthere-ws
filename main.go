@@ -1,4 +1,4 @@
-package beenthere
+package main
 
 import (
 	"net/http"
@@ -20,7 +20,10 @@ func main() {
 	if err != nil {
 		log.WithField("error", err.Error()).Fatal("unable to connect to database")
 	}
-	vc := NewVisitClient(sess)
+	vc := NewVisitClient(VisitConfig{
+		DB:    "been_there",
+		Table: "user_visits",
+	}, sess)
 	hdlr := NewHandler(vc)
 
 	log.WithField("port", port).Info("starting service...")

@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/nstogner/beenthere-ws/cities"
+	"github.com/nstogner/beenthere-ws/visits"
 	"github.com/nstogner/httpware"
 	"github.com/nstogner/httpware/contentware"
 	"github.com/nstogner/httpware/logware"
@@ -15,14 +17,16 @@ import (
 // interface.
 type Handler struct {
 	middleware *httpware.Composite
-	visits     *VisitClient
+	visits     *visits.Client
+	cities     *cities.Client
 	router     *httprouter.Router
 }
 
 // NewHandler returns an instance of Handler with registered routes.
-func NewHandler(visits *VisitClient) *Handler {
+func NewHandler(visits *visits.Client, locs *cities.Client) *Handler {
 	h := &Handler{
 		visits: visits,
+		cities: locs,
 	}
 
 	// Configure any needed middleware.
@@ -63,9 +67,14 @@ func (h *Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 func (h *Handler) GetCities(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
-	stateId := ps.ByName("state")
+	state := ps.ByName("state")
 
-	_ = stateId
+	stateName := h.cities.StateName(state)
+	if stateName == "" {
+		return httpware.NewErr("no such state", http.StatusBadRequest)
+	}
+
+	// TODO: Return all cities in a state.
 
 	return nil
 }
@@ -75,7 +84,7 @@ func (h *Handler) PostUserVisit(ctx context.Context, res http.ResponseWriter, re
 	userId := ps.ByName("user")
 
 	// Grab the visit details from the http body.
-	visit := NewVisit()
+	visit := visits.NewVisit()
 	rqt := contentware.RequestTypeFromCtx(ctx)
 	if err := rqt.Decode(req.Body, visit); err != nil {
 		return httpware.NewErr("unable to parse body: "+err.Error(), http.StatusBadRequest)

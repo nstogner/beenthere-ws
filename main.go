@@ -6,6 +6,8 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dancannon/gorethink"
+	"github.com/nstogner/beenthere-ws/cities"
+	"github.com/nstogner/beenthere-ws/visits"
 )
 
 var log = logrus.New()
@@ -16,16 +18,22 @@ func main() {
 		port = "8080"
 	}
 
+	// Setup DB connection/clients.
 	sess, err := gorethink.Connect(gorethink.ConnectOpts{})
 	if err != nil {
 		log.WithField("error", err.Error()).Fatal("unable to connect to database")
 	}
-	vc := NewVisitClient(VisitConfig{
+	vc := visits.NewClient(visits.Config{
 		DB:    "been_there",
 		Table: "user_visits",
 	}, sess)
-	hdlr := NewHandler(vc)
+	lc := cities.NewClient(cities.Config{
+		DB:    "been_there",
+		Table: "cities",
+	}, sess)
 
+	// Setup http handler.
+	hdlr := NewHandler(vc, lc)
 	log.WithField("port", port).Info("starting service...")
 	log.Fatal(http.ListenAndServe(":"+port, hdlr))
 }

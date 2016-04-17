@@ -1,4 +1,4 @@
-package main
+package visits
 
 import (
 	"fmt"
@@ -7,8 +7,8 @@ import (
 	r "github.com/dancannon/gorethink"
 )
 
-type VisitClient struct {
-	config  VisitConfig
+type Client struct {
+	config  Config
 	session *r.Session
 }
 
@@ -20,13 +20,13 @@ type Visit struct {
 	Timestamp time.Time `json:"timestamp,omitempty" xml:"timestamp,omitempty" gorethink:"timestamp"`
 }
 
-type VisitConfig struct {
+type Config struct {
 	DB    string
 	Table string
 }
 
-func NewVisitClient(conf VisitConfig, sess *r.Session) *VisitClient {
-	return &VisitClient{
+func NewClient(conf Config, sess *r.Session) *Client {
+	return &Client{
 		config:  conf,
 		session: sess,
 	}
@@ -36,11 +36,11 @@ func NewVisit() *Visit {
 	return &Visit{}
 }
 
-func (c *VisitClient) Validate(visit *Visit) error {
+func (c *Client) Validate(visit *Visit) error {
 	return nil
 }
 
-func (c *VisitClient) GetVisits(userId string) ([]Visit, error) {
+func (c *Client) GetVisits(userId string) ([]Visit, error) {
 	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get visits: %s", err.Error())
@@ -53,7 +53,7 @@ func (c *VisitClient) GetVisits(userId string) ([]Visit, error) {
 	return visits, nil
 }
 
-func (c *VisitClient) GetStates(userId string) ([]string, error) {
+func (c *Client) GetStates(userId string) ([]string, error) {
 	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Field("state").Distinct().Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get visits: %s", err.Error())
@@ -66,7 +66,7 @@ func (c *VisitClient) GetStates(userId string) ([]string, error) {
 	return states, nil
 }
 
-func (c *VisitClient) GetCities(userId string) ([]string, error) {
+func (c *Client) GetCities(userId string) ([]string, error) {
 	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Field("city").Distinct().Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get visits: %s", err.Error())
@@ -79,7 +79,7 @@ func (c *VisitClient) GetCities(userId string) ([]string, error) {
 	return cities, nil
 }
 
-func (c *VisitClient) Add(visit *Visit) error {
+func (c *Client) Add(visit *Visit) error {
 	visit.Timestamp = time.Now()
 	result, err := r.DB(c.config.DB).Table(c.config.Table).Insert(visit).RunWrite(c.session)
 	if err != nil {
@@ -89,7 +89,7 @@ func (c *VisitClient) Add(visit *Visit) error {
 	return nil
 }
 
-func (c *VisitClient) Delete(visitId string) error {
+func (c *Client) Delete(visitId string) error {
 	_, err := r.DB(c.config.DB).Table(c.config.Table).Get(visitId).Delete().RunWrite(c.session)
 	if err != nil {
 		return fmt.Errorf("unable to delete visit: %s", err.Error())

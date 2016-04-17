@@ -52,8 +52,8 @@ func (c *Client) Validate(visit *Visit) error {
 }
 
 // GetVisits gets a list of Visit entities from the database.
-func (c *Client) GetVisits(userId string) ([]Visit, error) {
-	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Run(c.session)
+func (c *Client) GetVisits(userId string, start, limit int) ([]Visit, error) {
+	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Slice(start, start+limit).Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get visits: %s", err.Error())
 	}

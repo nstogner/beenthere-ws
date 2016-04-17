@@ -1,8 +1,10 @@
-package main
+package handler
 
 import (
 	"net/http"
+	"strconv"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 	"github.com/nstogner/beenthere-ws/cities"
 	"github.com/nstogner/beenthere-ws/visits"
@@ -20,20 +22,29 @@ type Handler struct {
 	visits     *visits.Client
 	cities     *cities.Client
 	router     *httprouter.Router
+	logger     *logrus.Logger
 }
 
-// NewHandler returns an instance of Handler with registered routes.
-func NewHandler(visits *visits.Client, cities *cities.Client) *Handler {
+// Config is used to create a new instance of Handler in New(...).
+type Config struct {
+	Logger       *logrus.Logger
+	VisitsClient *visits.Client
+	CitiesClient *cities.Client
+}
+
+// New returns an instance of Handler with registered routes.
+func New(conf Config) *Handler {
 	h := &Handler{
-		visits: visits,
-		cities: cities,
+		logger: conf.Logger,
+		visits: conf.VisitsClient,
+		cities: conf.CitiesClient,
 	}
 
 	// Configure any needed middleware.
 	h.middleware = httpware.Compose(
 		contentware.New(contentware.Defaults),
 		logware.New(logware.Config{
-			Logger:    log,
+			Logger:    h.logger,
 			Headers:   []string{},
 			Successes: true,
 			Failures:  true,
@@ -131,8 +142,19 @@ func (h *Handler) DeleteVisit(ctx context.Context, res http.ResponseWriter, req 
 func (h *Handler) GetVisits(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")
+	// TODO: Implement pagination in httpware.
+	// TODO: What about defaults?
+	// TODO: What about negative numbers?
+	start, err := strconv.Atoi(req.URL.Query().Get("start"))
+	if err != nil {
+		return httpware.NewErr("param 'start' must be an integer", http.StatusBadRequest)
+	}
+	limit, err := strconv.Atoi(req.URL.Query().Get("limit"))
+	if err != nil {
+		return httpware.NewErr("param 'limit' must be an integer", http.StatusBadRequest)
+	}
 
-	cities, err := h.visits.GetVisits(userId)
+	cities, err := h.visits.GetVisits(userId, start, limit)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}

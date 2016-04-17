@@ -23,10 +23,10 @@ type Handler struct {
 }
 
 // NewHandler returns an instance of Handler with registered routes.
-func NewHandler(visits *visits.Client, locs *cities.Client) *Handler {
+func NewHandler(visits *visits.Client, cities *cities.Client) *Handler {
 	h := &Handler{
 		visits: visits,
-		cities: locs,
+		cities: cities,
 	}
 
 	// Configure any needed middleware.
@@ -65,20 +65,27 @@ func (h *Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	h.router.ServeHTTP(res, req)
 }
 
+// GetCities serves a list of cities in a given state.
 func (h *Handler) GetCities(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	state := ps.ByName("state")
 
 	stateName := h.cities.StateName(state)
 	if stateName == "" {
-		return httpware.NewErr("no such state", http.StatusBadRequest)
+		return httpware.NewErr("no such state", http.StatusNotFound)
 	}
 
-	// TODO: Return all cities in a state.
+	cities, err := h.cities.GetCityNames(state)
+	if err != nil {
+		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
+	}
 
+	rst := contentware.ResponseTypeFromCtx(ctx)
+	rst.Encode(res, cities)
 	return nil
 }
 
+// PostUserVisit adds a city/state that a user has visited.
 func (h *Handler) PostUserVisit(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")
@@ -106,6 +113,7 @@ func (h *Handler) PostUserVisit(ctx context.Context, res http.ResponseWriter, re
 	return nil
 }
 
+// DeleteVisit removes a given user's previously added visit.
 func (h *Handler) DeleteVisit(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	visitId := ps.ByName("visit")
@@ -119,6 +127,7 @@ func (h *Handler) DeleteVisit(ctx context.Context, res http.ResponseWriter, req 
 	return nil
 }
 
+// GetVisits serves a list of visit info for a given user.
 func (h *Handler) GetVisits(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")
@@ -133,6 +142,8 @@ func (h *Handler) GetVisits(ctx context.Context, res http.ResponseWriter, req *h
 	return nil
 }
 
+// GetCitiesVisited serves a unique list of cities that have been visited by a
+// given user.
 func (h *Handler) GetCitiesVisited(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")
@@ -147,6 +158,8 @@ func (h *Handler) GetCitiesVisited(ctx context.Context, res http.ResponseWriter,
 	return nil
 }
 
+// GetCitiesVisited serves a unique list of states that have been visited by a
+// given user.
 func (h *Handler) GetStatesVisited(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")

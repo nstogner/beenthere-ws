@@ -1,6 +1,7 @@
 package visits
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -48,6 +49,12 @@ func NewVisit() *Visit {
 // Validate returns a non-nil error when it has been passed an invalid Visit
 // entity.
 func (c *Client) Validate(visit *Visit) error {
+	if visit.City == "" {
+		return errors.New("missing 'city' field")
+	}
+	if visit.State == "" {
+		return errors.New("missing 'state' field")
+	}
 	return nil
 }
 

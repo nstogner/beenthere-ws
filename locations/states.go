@@ -1,4 +1,4 @@
-package cities
+package locations
 
 var states = map[string]string{
 	"AL": "Alabama",

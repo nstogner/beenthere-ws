@@ -5,7 +5,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
-	"github.com/nstogner/beenthere-ws/cities"
+	"github.com/nstogner/beenthere-ws/locations"
 	"github.com/nstogner/beenthere-ws/visits"
 	"github.com/nstogner/httpware"
 	"github.com/nstogner/httpware/contentware"
@@ -20,7 +20,7 @@ import (
 type Handler struct {
 	middleware *httpware.Composite
 	visits     *visits.Client
-	cities     *cities.Client
+	locations  *locations.Client
 	router     *httprouter.Router
 	logger     *logrus.Logger
 }
@@ -29,15 +29,15 @@ type Handler struct {
 type Config struct {
 	Logger       *logrus.Logger
 	VisitsClient *visits.Client
-	CitiesClient *cities.Client
+	LocsClient   *locations.Client
 }
 
 // New returns an instance of Handler with registered routes.
 func New(conf Config) *Handler {
 	h := &Handler{
-		logger: conf.Logger,
-		visits: conf.VisitsClient,
-		cities: conf.CitiesClient,
+		logger:    conf.Logger,
+		visits:    conf.VisitsClient,
+		locations: conf.LocsClient,
 	}
 
 	// Configure any needed middleware.
@@ -88,12 +88,12 @@ func (h *Handler) GetCities(ctx context.Context, res http.ResponseWriter, req *h
 	ps := routeradapt.ParamsFromCtx(ctx)
 	state := ps.ByName("state")
 
-	stateName := h.cities.StateName(state)
+	stateName := h.locations.StateName(state)
 	if stateName == "" {
 		return httpware.NewErr("no such state", http.StatusNotFound)
 	}
 
-	cities, err := h.cities.GetCityNames(state)
+	cities, err := h.locations.GetCityNames(state)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}
@@ -118,6 +118,15 @@ func (h *Handler) PostUserVisit(ctx context.Context, res http.ResponseWriter, re
 		return httpware.NewErr("invalid visit", http.StatusBadRequest).WithField("invalid", err.Error())
 	}
 	visit.User = userId
+
+	// Check and see if the given State exists.
+	// TODO: How should City verification work?
+	//       Should a new visit be rejected if the given city doesnt exist in db?
+	//       Should unknown cities be accepted and verified offline?
+	city := locations.CityFromVisit(visit)
+	if err := h.locations.ValidateCity(city); err != nil {
+		return httpware.NewErr("invalid visit", http.StatusBadRequest).WithField("invalid", err.Error())
+	}
 
 	// Save the visit to the database.
 	if err := h.visits.Add(visit); err != nil {
@@ -167,6 +176,7 @@ func (h *Handler) GetCitiesVisited(ctx context.Context, res http.ResponseWriter,
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")
 
+	// Grab a unique list of cities visited by the given user.
 	cities, err := h.visits.GetCities(userId)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
@@ -183,9 +193,14 @@ func (h *Handler) GetStatesVisited(ctx context.Context, res http.ResponseWriter,
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")
 
+	// Grab a unique list of states visited by the given user.
 	states, err := h.visits.GetStates(userId)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
+	}
+	// Map state abbreviations to names.
+	for i, s := range states {
+		states[i] = h.locations.StateName(s)
 	}
 
 	rsp := contentware.ResponseTypeFromCtx(ctx)

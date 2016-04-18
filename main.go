@@ -6,8 +6,8 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dancannon/gorethink"
-	"github.com/nstogner/beenthere-ws/cities"
 	"github.com/nstogner/beenthere-ws/handler"
+	"github.com/nstogner/beenthere-ws/locations"
 	"github.com/nstogner/beenthere-ws/visits"
 )
 
@@ -28,7 +28,7 @@ func main() {
 		DB:    "been_there",
 		Table: "user_visits",
 	}, sess)
-	cc := cities.NewClient(cities.Config{
+	lc := locations.NewClient(locations.Config{
 		DB:    "been_there",
 		Table: "cities",
 	}, sess)
@@ -37,7 +37,7 @@ func main() {
 	hdlr := handler.New(handler.Config{
 		Logger:       log,
 		VisitsClient: vc,
-		CitiesClient: cc,
+		LocsClient:   lc,
 	})
 	log.WithField("port", port).Info("starting service...")
 	log.Fatal(http.ListenAndServe(":"+port, hdlr))

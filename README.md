@@ -14,6 +14,9 @@ This web service provides a REST api to allow users to pin areas they've visited
 
 **Pagination**: Pagination is done via query parameters: "start" and "limit".
 
+### DATABASE
+[RethinkDB](https://www.rethinkdb.com/) is used as the data-store. This NoSQL database was mainly chosen for it's streaming features. A social application such as this one could benefit from a feed of real-time user updates. In addition to streaming, RethinkDB aims to be very easy to administer, which reduces operational burden.
+
 ### CONSIDERATIONS
 #### 1. User Authentication
 User authentication/authorization probably should exist in another service. This design would have a better seperation of concerns than lumping user-access in with user-visit functionality.

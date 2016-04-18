@@ -26,6 +26,7 @@ Since there are a great number of cities, the in-memory map (used with states) i
 
 ### TODO
 * Remove hardcoded list of states, and read from db on startup
+* Add environment-based configuration
 * Implement a streaming endpoint
 * Create Dockerfile
 * Create Kubernetes files

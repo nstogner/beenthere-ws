@@ -28,4 +28,3 @@ Since there are a great number of cities, the in-memory map (used with states) i
 * Implement a streaming endpoint
 * Create Dockerfile
 * Create Kubernetes files
-* Include RethinkDB schema script

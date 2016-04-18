@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
@@ -11,6 +10,7 @@ import (
 	"github.com/nstogner/httpware"
 	"github.com/nstogner/httpware/contentware"
 	"github.com/nstogner/httpware/logware"
+	"github.com/nstogner/httpware/pageware"
 	"github.com/nstogner/httpware/routeradapt"
 	"golang.org/x/net/context"
 )
@@ -50,6 +50,9 @@ func New(conf Config) *Handler {
 			Failures:  true,
 		}),
 	)
+	paginated := h.middleware.With(
+		pageware.New(pageware.Defaults),
+	)
 
 	// Register all http routes. Note: plural names are used to adhere with
 	// RESTful conventions.
@@ -57,7 +60,11 @@ func New(conf Config) *Handler {
 	rtr.GET("/states/:state/cities", h.wrap(h.GetCities))
 	rtr.POST("/users/:user/visits", h.wrap(h.PostUserVisit))
 	rtr.DELETE("/users/:user/visits/:visit", h.wrap(h.DeleteVisit))
-	rtr.GET("/users/:user/visits", h.wrap(h.GetVisits))
+	// Paginate the visits endpoint.
+	rtr.GET(
+		"/users/:user/visits",
+		routeradapt.Adapt(paginated.ThenFunc(h.GetVisits)),
+	)
 	rtr.GET("/users/:user/visits/cities", h.wrap(h.GetCitiesVisited))
 	rtr.GET("/users/:user/visits/states", h.wrap(h.GetStatesVisited))
 	h.router = rtr
@@ -142,19 +149,9 @@ func (h *Handler) DeleteVisit(ctx context.Context, res http.ResponseWriter, req 
 func (h *Handler) GetVisits(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
 	userId := ps.ByName("user")
-	// TODO: Implement pagination in httpware.
-	// TODO: What about defaults?
-	// TODO: What about negative numbers?
-	start, err := strconv.Atoi(req.URL.Query().Get("start"))
-	if err != nil {
-		return httpware.NewErr("param 'start' must be an integer", http.StatusBadRequest)
-	}
-	limit, err := strconv.Atoi(req.URL.Query().Get("limit"))
-	if err != nil {
-		return httpware.NewErr("param 'limit' must be an integer", http.StatusBadRequest)
-	}
+	page := pageware.PageFromCtx(ctx)
 
-	cities, err := h.visits.GetVisits(userId, start, limit)
+	cities, err := h.visits.GetVisits(userId, page.Start, page.Limit)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}

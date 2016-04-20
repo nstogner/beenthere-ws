@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dancannon/gorethink"
@@ -14,23 +14,24 @@ import (
 var log = logrus.New()
 
 func main() {
-	port, ok := os.LookupEnv("PORT")
-	if !ok {
-		port = "8080"
-	}
+	// Pull configuration from the environment.
+	conf := ConfigFromEnv()
 
 	// Setup DB connection/clients.
-	sess, err := gorethink.Connect(gorethink.ConnectOpts{})
+	sess, err := gorethink.Connect(gorethink.ConnectOpts{
+		Address: fmt.Sprintf("%s:%s", conf.DBHost, conf.DBPort),
+		// Database: conf.DBName,
+	})
 	if err != nil {
 		log.WithField("error", err.Error()).Fatal("unable to connect to database")
 	}
 	vc := visits.NewClient(visits.Config{
-		DB:    "been_there",
-		Table: "user_visits",
+		DB:    conf.DBName,
+		Table: conf.VisitsTable,
 	}, sess)
 	lc := locations.NewClient(locations.Config{
-		DB:    "been_there",
-		Table: "cities",
+		DB:    conf.DBName,
+		Table: conf.CitiesTable,
 	}, sess)
 
 	// Setup http handler.
@@ -39,6 +40,6 @@ func main() {
 		VisitsClient: vc,
 		LocsClient:   lc,
 	})
-	log.WithField("port", port).Info("starting service...")
-	log.Fatal(http.ListenAndServe(":"+port, hdlr))
+	log.WithField("port", conf.ServerPort).Info("starting service...")
+	log.Fatal(http.ListenAndServe(":"+conf.ServerPort, hdlr))
 }

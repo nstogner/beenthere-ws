@@ -19,7 +19,7 @@ This web service provides a REST api to allow users to pin areas they've visited
 
 ### CONSIDERATIONS
 #### 1. User Authentication
-User authentication/authorization probably should exist in another service. This design would have a better seperation of concerns than lumping user-access in with user-visit functionality.
+User authentication probably should exist in another service. This design would have a better seperation of concerns than lumping user-access in with user-visit functionality.
 #### 2. Validating States (new visit requests)
 When a user adds a visit, the state is currently validated against an in-memory map of US states. This is done so that validating the given state does not require a database call and thereby slow down every new visit request.
 #### 3. Validating Cities (new visit requests)
@@ -28,8 +28,8 @@ Since there are a great number of cities, the in-memory map (used with states) i
 * Maintain a source of truth of cities in the database & validate on each new visit request
 
 ### TODO
-* Remove hardcoded list of states, and read from db on startup
-* Write tests
+* Write more test cases
 * Implement a streaming endpoint
+* Remove hardcoded list of states, and read from db on startup
 * Create Dockerfile
 * Create Kubernetes files

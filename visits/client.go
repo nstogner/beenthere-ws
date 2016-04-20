@@ -3,6 +3,7 @@ package visits
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	r "github.com/dancannon/gorethink"
@@ -104,6 +105,8 @@ func (c *Client) GetCities(userId string) ([]string, error) {
 
 // Add inserts a new Visit instance into the database.
 func (c *Client) Add(visit *Visit) error {
+	// Store states in uppercase for consistency.
+	visit.State = strings.ToUpper(visit.State)
 	result, err := r.DB(c.config.DB).Table(c.config.Table).Insert(visit).RunWrite(c.session)
 	if err != nil {
 		return fmt.Errorf("unable to add visit: %s", err.Error())

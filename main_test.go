@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	r "github.com/dancannon/gorethink"
@@ -15,7 +18,7 @@ import (
 
 // TestServer relies on rethinkdb being installed on the localhost. This can
 // be changed by setting environment variables defined in config.go to point
-// to another database.
+// to another database. To install: https://www.rethinkdb.com/docs/install/
 func TestServer(t *testing.T) {
 	// checkErr will fail the test for non-nil errors.
 	checkErr := func(msg string, err error) {
@@ -24,11 +27,13 @@ func TestServer(t *testing.T) {
 		}
 	}
 
-	conf := ConfigFromEnv()
 	// This hardcoded db name is very important. It ensures that even if the
 	// test is ran while configured to point to a production db thru env
 	// variables, it wont harm the production data.
-	conf.DBName = "testing"
+	os.Setenv("DB_NAME", "beenthere_testing")
+	conf := ConfigFromEnv()
+	// Really make sure it is the testing db...
+	conf.DBName = "beenthere_testing"
 
 	// Setup DB connection/clients.
 	sess, err := r.Connect(r.ConnectOpts{
@@ -54,6 +59,8 @@ func TestServer(t *testing.T) {
 	server := httptest.NewServer(hdlr)
 
 	// Setup test db/tables.
+	_, err = r.DBCreate(conf.DBName).RunWrite(sess)
+	checkErr("creating db", err)
 	_, err = r.TableCreate(conf.VisitsTable).RunWrite(sess)
 	checkErr("creating table", err)
 	_, err = r.TableCreate(conf.CitiesTable).RunWrite(sess)
@@ -62,9 +69,13 @@ func TestServer(t *testing.T) {
 	checkErr("creating table index", err)
 	_, err = r.Table(conf.CitiesTable).IndexCreate("state").RunWrite(sess)
 	checkErr("creating table index", err)
+	_, err = r.Table(conf.VisitsTable).IndexWait("user").Run(sess)
+	checkErr("waiting on table index", err)
+	_, err = r.Table(conf.CitiesTable).IndexWait("state").Run(sess)
+	checkErr("waiting on table index", err)
 	defer func() {
 		// Cleanup testing db.
-		r.DBDrop(conf.DBName)
+		r.DBDrop(conf.DBName).RunWrite(sess)
 	}()
 
 	// Run test cases.
@@ -74,7 +85,86 @@ func TestServer(t *testing.T) {
 		}
 	}
 
-	resp, err := http.Post(server.URL+"/users/testman/visits", "application/json", nil)
+	///////////////////////////////////////////////////////////////////////////
+	resp, err := http.Post(
+		server.URL+"/users/testman/visits",
+		"application/json",
+		// POST a lowercase state and verify later that it was converted to
+		// uppercase.
+		strings.NewReader(`{"city": "Raleigh", "state": "nc"}`),
+	)
+	checkErr("failed to make http request", err)
+	checkStatus("POSTing a valid visit", resp, http.StatusOK)
+	///////////////////////////////////////////////////////////////////////////
+	resp, err = http.Post(server.URL+"/users/testman/visits", "application/json", nil)
 	checkErr("failed to make http request", err)
 	checkStatus("POSTing an empty visit", resp, http.StatusBadRequest)
+	///////////////////////////////////////////////////////////////////////////
+	resp, err = http.Get(server.URL + "/users/testman/visits")
+	checkErr("failed to make http request", err)
+	checkStatus("GETing a user visit", resp, http.StatusOK)
+	visitsBody := &struct {
+		Visits []visits.Visit `json:"visits"`
+	}{make([]visits.Visit, 0)}
+	checkErr("parsing visits response body", json.NewDecoder(resp.Body).Decode(visitsBody))
+	if len(visitsBody.Visits) != 1 {
+		t.Fatal("expected exactly 1 visit to be returned")
+	}
+	if visitsBody.Visits[0].User != "testman" {
+		t.Fatal("expected visit.user to be set to 'testman'")
+	}
+	if visitsBody.Visits[0].City != "Raleigh" {
+		t.Fatal("expected visit.city to be set to 'Raleigh'")
+	}
+	if visitsBody.Visits[0].State != "NC" {
+		t.Fatal("expected visit.state to be set to 'NC'")
+	}
+	raleighVisitId := visitsBody.Visits[0].ID
+	///////////////////////////////////////////////////////////////////////////
+	resp, err = http.Post(
+		server.URL+"/users/testman/visits",
+		"application/json",
+		strings.NewReader(`{"city": "Charlotte", "state": "NC"}`),
+	)
+	checkErr("failed to make http request", err)
+	checkStatus("POSTing a valid visit", resp, http.StatusOK)
+	///////////////////////////////////////////////////////////////////////////
+	resp, err = http.Get(server.URL + "/users/testman/visits/states")
+	checkErr("failed to make http request", err)
+	checkStatus("GETing the states a user visited", resp, http.StatusOK)
+	statesBody := &struct {
+		States []string `json:"states"`
+	}{make([]string, 0)}
+	checkErr("parsing states response body", json.NewDecoder(resp.Body).Decode(statesBody))
+	if len(statesBody.States) != 1 {
+		t.Fatal("expected exactly 1 unique state to be returned")
+	}
+	///////////////////////////////////////////////////////////////////////////
+	resp, err = http.Get(server.URL + "/users/testman/visits/cities")
+	checkErr("failed to make http request", err)
+	checkStatus("GETing the cities a user visited", resp, http.StatusOK)
+	citiesBody := &struct {
+		Cities []string `json:"cities"`
+	}{make([]string, 0)}
+	checkErr("parsing cities response body", json.NewDecoder(resp.Body).Decode(citiesBody))
+	if len(citiesBody.Cities) != 2 {
+		t.Fatal("expected exactly 2 unique cities to be returned")
+	}
+	///////////////////////////////////////////////////////////////////////////
+	req, err := http.NewRequest("DELETE", server.URL+"/users/testman/visits/"+raleighVisitId, nil)
+	checkErr("generating http request", err)
+	resp, err = http.DefaultClient.Do(req)
+	checkErr("failed to make http request", err)
+	checkStatus("DELETEing the Raleigh user visit", resp, http.StatusNoContent)
+	///////////////////////////////////////////////////////////////////////////
+	resp, err = http.Get(server.URL + "/users/testman/visits")
+	checkErr("failed to make http request", err)
+	checkStatus("GETing a user visit", resp, http.StatusOK)
+	visitsBody = &struct {
+		Visits []visits.Visit `json:"visits"`
+	}{make([]visits.Visit, 0)}
+	checkErr("parsing visits response body", json.NewDecoder(resp.Body).Decode(visitsBody))
+	if len(visitsBody.Visits) != 1 {
+		t.Fatal("expected exactly 1 visit to be returned")
+	}
 }

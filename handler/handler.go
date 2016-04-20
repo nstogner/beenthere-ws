@@ -93,13 +93,15 @@ func (h *Handler) GetCities(ctx context.Context, res http.ResponseWriter, req *h
 		return httpware.NewErr("no such state", http.StatusNotFound)
 	}
 
-	cities, err := h.locations.GetCityNames(state)
+	dbCities, err := h.locations.GetCityNames(state)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}
 
 	rst := contentware.ResponseTypeFromCtx(ctx)
-	rst.Encode(res, cities)
+	rst.Encode(res, struct {
+		Cities []string `json:"cities" xml:"cities"`
+	}{dbCities})
 	return nil
 }
 
@@ -160,13 +162,15 @@ func (h *Handler) GetVisits(ctx context.Context, res http.ResponseWriter, req *h
 	userId := ps.ByName("user")
 	page := pageware.PageFromCtx(ctx)
 
-	cities, err := h.visits.GetVisits(userId, page.Start, page.Limit)
+	dbVisits, err := h.visits.GetVisits(userId, page.Start, page.Limit)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}
 
 	rsp := contentware.ResponseTypeFromCtx(ctx)
-	rsp.Encode(res, cities)
+	rsp.Encode(res, struct {
+		Visits []visits.Visit `json:"visits" xml:"visits"`
+	}{dbVisits})
 	return nil
 }
 
@@ -177,13 +181,15 @@ func (h *Handler) GetCitiesVisited(ctx context.Context, res http.ResponseWriter,
 	userId := ps.ByName("user")
 
 	// Grab a unique list of cities visited by the given user.
-	cities, err := h.visits.GetCities(userId)
+	dbCities, err := h.visits.GetCities(userId)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}
 
 	rsp := contentware.ResponseTypeFromCtx(ctx)
-	rsp.Encode(res, cities)
+	rsp.Encode(res, struct {
+		Cities []string `json:"cities" xml:"cities"`
+	}{dbCities})
 	return nil
 }
 
@@ -194,16 +200,18 @@ func (h *Handler) GetStatesVisited(ctx context.Context, res http.ResponseWriter,
 	userId := ps.ByName("user")
 
 	// Grab a unique list of states visited by the given user.
-	states, err := h.visits.GetStates(userId)
+	dbStates, err := h.visits.GetStates(userId)
 	if err != nil {
 		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
 	}
 	// Map state abbreviations to names.
-	for i, s := range states {
-		states[i] = h.locations.StateName(s)
+	for i, s := range dbStates {
+		dbStates[i] = h.locations.StateName(s)
 	}
 
 	rsp := contentware.ResponseTypeFromCtx(ctx)
-	rsp.Encode(res, states)
+	rsp.Encode(res, struct {
+		States []string `json:"states" xml:"states"`
+	}{dbStates})
 	return nil
 }

@@ -71,6 +71,18 @@ func TestServer(t *testing.T) {
 	checkErr("waiting on table index", err)
 	_, err = r.Table(conf.CitiesTable).IndexWait("state").Run(sess)
 	checkErr("waiting on table index", err)
+	_, err = r.Table(conf.CitiesTable).Insert(map[string]string{
+		"id":    "Raleigh,NC",
+		"state": "NC",
+		"city":  "Raleigh",
+	}).RunWrite(sess)
+	checkErr("inserting city record", err)
+	_, err = r.Table(conf.CitiesTable).Insert(map[string]string{
+		"id":    "Charlotte,NC",
+		"state": "NC",
+		"city":  "Charlotte",
+	}).RunWrite(sess)
+	checkErr("inserting city record", err)
 	defer func() {
 		// Cleanup testing db.
 		r.DBDrop(conf.DBName).RunWrite(sess)
@@ -164,5 +176,16 @@ func TestServer(t *testing.T) {
 	checkErr("parsing visits response body", json.NewDecoder(resp.Body).Decode(visitsBody))
 	if len(visitsBody.Visits) != 1 {
 		t.Fatal("expected exactly 1 visit to be returned")
+	}
+	///////////////////////////////////////////////////////////////////////////
+	resp, err = http.Get(server.URL + "/states/nc/cities")
+	checkErr("failed to make http request", err)
+	checkStatus("GETing a list of cities in a state", resp, http.StatusOK)
+	stateCitiesBody := &struct {
+		Cities []string `json:"cities"`
+	}{make([]string, 0)}
+	checkErr("parsing cities response body", json.NewDecoder(resp.Body).Decode(stateCitiesBody))
+	if len(stateCitiesBody.Cities) != 2 {
+		t.Fatalf("expected exactly 2 cities to be returned, got %v", stateCitiesBody.Cities)
 	}
 }

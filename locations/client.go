@@ -78,7 +78,7 @@ func (c *Client) AddCity(city *City) error {
 // GetCityNames returns a list of city names which are in the database and
 // have the given state associated with them.
 func (c *Client) GetCityNames(state string) ([]string, error) {
-	result, err := r.Table(c.config.Table).GetAllByIndex("state", state).Run(c.session)
+	result, err := r.Table(c.config.Table).GetAllByIndex("state", strings.ToUpper(state)).Field("city").Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get cities: %s", err.Error())
 	}

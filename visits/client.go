@@ -27,7 +27,6 @@ type Visit struct {
 
 // Config is used to create a new instance of Client via NewClient(...).
 type Config struct {
-	DB    string
 	Table string
 }
 
@@ -61,7 +60,7 @@ func (c *Client) Validate(visit *Visit) error {
 
 // GetVisits gets a list of Visit entities from the database.
 func (c *Client) GetVisits(userId string, start, limit int) ([]Visit, error) {
-	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Slice(start, start+limit).Run(c.session)
+	result, err := r.Table(c.config.Table).GetAllByIndex("user", userId).Slice(start, start+limit).Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get visits: %s", err.Error())
 	}
@@ -76,7 +75,7 @@ func (c *Client) GetVisits(userId string, start, limit int) ([]Visit, error) {
 // GetStates gets a unique list of states visited by a given user from the
 // database.
 func (c *Client) GetStates(userId string) ([]string, error) {
-	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Field("state").Distinct().Run(c.session)
+	result, err := r.Table(c.config.Table).GetAllByIndex("user", userId).Field("state").Distinct().Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get visits: %s", err.Error())
 	}
@@ -91,7 +90,7 @@ func (c *Client) GetStates(userId string) ([]string, error) {
 // GetCities gets a unique list of cities visited by a given user from the
 // database.
 func (c *Client) GetCities(userId string) ([]string, error) {
-	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("user", userId).Field("city").Distinct().Run(c.session)
+	result, err := r.Table(c.config.Table).GetAllByIndex("user", userId).Field("city").Distinct().Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get visits: %s", err.Error())
 	}
@@ -107,7 +106,7 @@ func (c *Client) GetCities(userId string) ([]string, error) {
 func (c *Client) Add(visit *Visit) error {
 	// Store states in uppercase for consistency.
 	visit.State = strings.ToUpper(visit.State)
-	result, err := r.DB(c.config.DB).Table(c.config.Table).Insert(visit).RunWrite(c.session)
+	result, err := r.Table(c.config.Table).Insert(visit).RunWrite(c.session)
 	if err != nil {
 		return fmt.Errorf("unable to add visit: %s", err.Error())
 	}
@@ -117,9 +116,40 @@ func (c *Client) Add(visit *Visit) error {
 
 // Delete removes a Visit instance from the database given a unique visitId.
 func (c *Client) Delete(visitId string) error {
-	_, err := r.DB(c.config.DB).Table(c.config.Table).Get(visitId).Delete().RunWrite(c.session)
+	_, err := r.Table(c.config.Table).Get(visitId).Delete().RunWrite(c.session)
 	if err != nil {
 		return fmt.Errorf("unable to delete visit: %s", err.Error())
 	}
 	return nil
+}
+
+// VisitFeed is an abstraction over a rethinkdb change-feed.
+type VisitFeed struct {
+	cursor *r.Cursor
+}
+
+// Next grabs the next visit from the VisitFeed change-feed.
+func (vs *VisitFeed) Next(visit *Visit) bool {
+	if vs.cursor.Next(visit) {
+		// If it is an empty record (ie: a visit was deleted)
+		if visit.ID == "" {
+			// Try again.
+			return vs.Next(visit)
+		} else {
+			// Otherwise, return true, indicating it is a valid visit.
+			return true
+		}
+	} else {
+		// TODO: Check for errors here.
+		return false
+	}
+}
+
+// Stream opens a change feed from the db.
+func (c *Client) Stream() (*VisitFeed, error) {
+	cursor, err := r.Table(c.config.Table).Changes().Field("new_val").Run(c.session)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open visits change-feed: %s", err.Error())
+	}
+	return &VisitFeed{cursor}, nil
 }

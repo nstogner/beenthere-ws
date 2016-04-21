@@ -19,22 +19,20 @@ func main() {
 
 	// Setup DB connection/clients.
 	sess, err := gorethink.Connect(gorethink.ConnectOpts{
-		Address: fmt.Sprintf("%s:%s", conf.DBHost, conf.DBPort),
-		// Database: conf.DBName,
+		Address:  fmt.Sprintf("%s:%s", conf.DBHost, conf.DBPort),
+		Database: conf.DBName,
 	})
 	if err != nil {
 		log.WithField("error", err.Error()).Fatal("unable to connect to database")
 	}
 	vc := visits.NewClient(visits.Config{
-		DB:    conf.DBName,
 		Table: conf.VisitsTable,
 	}, sess)
 	lc := locations.NewClient(locations.Config{
-		DB:    conf.DBName,
 		Table: conf.CitiesTable,
 	}, sess)
 
-	// Setup http handler.
+	// Setup HTTP handler.
 	hdlr := handler.New(handler.Config{
 		Logger:       log,
 		VisitsClient: vc,

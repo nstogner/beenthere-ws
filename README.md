@@ -2,7 +2,7 @@
 
 This web service provides a REST api to allow users to pin areas they've visited and potentially share them with other users.
 
-### ENDPOINTS
+### ROUTES
 | Method | URL | Function |
 |:-------|:----|:---------|
 | GET | /states/:state/cities | Getting a list of cities from in a given state |
@@ -11,6 +11,7 @@ This web service provides a REST api to allow users to pin areas they've visited
 | GET | /users/:user/visits | Getting a list of visit for a given user (paginated) |
 | GET | /users/:user/visits/cities | Getting a list of unique city names visited by a given user |
 | GET | /users/:user/visits/states | Getting a list of unique state names visited by a given user |
+| GET | /streams/visits | Stream new visits using Server Sent Events |
 
 **Pagination**: Pagination is done via query parameters: "start" and "limit".
 
@@ -29,7 +30,6 @@ Since there are a great number of cities, the in-memory map (used with states) i
 
 ### TODO
 * Write more test cases
-* Implement a streaming endpoint
 * Remove hardcoded list of states, and read from db on startup
 * Create Dockerfile
 * Create Kubernetes files

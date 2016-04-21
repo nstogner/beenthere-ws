@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/Sirupsen/logrus"
@@ -12,6 +13,7 @@ import (
 	"github.com/nstogner/httpware/logware"
 	"github.com/nstogner/httpware/pageware"
 	"github.com/nstogner/httpware/routeradapt"
+	"github.com/nstogner/httpware/streamware"
 	"golang.org/x/net/context"
 )
 
@@ -53,6 +55,9 @@ func New(conf Config) *Handler {
 	paginated := h.middleware.With(
 		pageware.New(pageware.Defaults),
 	)
+	streaming := h.middleware.With(
+		streamware.New(streamware.Defaults),
+	)
 
 	// Register all http routes. Note: plural names are used to adhere with
 	// RESTful conventions.
@@ -67,6 +72,10 @@ func New(conf Config) *Handler {
 	)
 	rtr.GET("/users/:user/visits/cities", h.wrap(h.GetCitiesVisited))
 	rtr.GET("/users/:user/visits/states", h.wrap(h.GetStatesVisited))
+	rtr.GET(
+		"/streams/visits",
+		routeradapt.Adapt(streaming.ThenFunc(h.StreamVisits)),
+	)
 	h.router = rtr
 
 	return h
@@ -193,7 +202,7 @@ func (h *Handler) GetCitiesVisited(ctx context.Context, res http.ResponseWriter,
 	return nil
 }
 
-// GetCitiesVisited serves a unique list of states that have been visited by a
+// GetStatesVisited serves a unique list of states that have been visited by a
 // given user.
 func (h *Handler) GetStatesVisited(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
 	ps := routeradapt.ParamsFromCtx(ctx)
@@ -213,5 +222,25 @@ func (h *Handler) GetStatesVisited(ctx context.Context, res http.ResponseWriter,
 	rsp.Encode(res, struct {
 		States []string `json:"states" xml:"states"`
 	}{dbStates})
+	return nil
+}
+
+// StreamVisits opens a connection for sending live user visit updates via
+// Server Sent Events (SSE).
+func (h *Handler) StreamVisits(ctx context.Context, res http.ResponseWriter, req *http.Request) error {
+	sender := streamware.SenderFromCtx(ctx)
+	stream, err := h.visits.Stream()
+	if err != nil {
+		return httpware.NewErr(err.Error(), http.StatusInternalServerError)
+	}
+	visit := &visits.Visit{}
+	for stream.Next(visit) {
+		js, err := json.Marshal(visit)
+		if err != nil {
+			return httpware.NewErr("unable to marshal visit into json: "+err.Error(), http.StatusInternalServerError)
+		}
+		sender.Send(string(js))
+		visit = &visits.Visit{}
+	}
 	return nil
 }

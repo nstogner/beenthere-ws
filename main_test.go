@@ -42,11 +42,9 @@ func TestServer(t *testing.T) {
 	})
 	checkErr("connecting to db", err)
 	vc := visits.NewClient(visits.Config{
-		DB:    conf.DBName,
 		Table: conf.VisitsTable,
 	}, sess)
 	lc := locations.NewClient(locations.Config{
-		DB:    conf.DBName,
 		Table: conf.CitiesTable,
 	}, sess)
 

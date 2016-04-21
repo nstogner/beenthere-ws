@@ -32,7 +32,6 @@ type Client struct {
 
 // Config is used to create a new Client instance via NewClient(...).
 type Config struct {
-	DB    string
 	Table string
 }
 
@@ -66,7 +65,7 @@ func (c *Client) ValidateCity(city *City) error {
 // Insert a new city into the database if the given city does not already
 // exist.
 func (c *Client) AddCity(city *City) error {
-	_, err := r.DB(c.config.DB).Table(c.config.Table).Insert(city).RunWrite(c.session)
+	_, err := r.Table(c.config.Table).Insert(city).RunWrite(c.session)
 	if r.IsConflictErr(err) {
 		return ErrAlreadyExists
 	}
@@ -79,7 +78,7 @@ func (c *Client) AddCity(city *City) error {
 // GetCityNames returns a list of city names which are in the database and
 // have the given state associated with them.
 func (c *Client) GetCityNames(state string) ([]string, error) {
-	result, err := r.DB(c.config.DB).Table(c.config.Table).GetAllByIndex("state", state).Run(c.session)
+	result, err := r.Table(c.config.Table).GetAllByIndex("state", state).Run(c.session)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get cities: %s", err.Error())
 	}

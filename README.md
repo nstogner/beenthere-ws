@@ -43,7 +43,7 @@ Configuration is done via environment variables. This allows for easy container 
 | GET | /users/:user/visits | Getting a list of visit for a given user (paginated) |
 | GET | /users/:user/visits/cities | Getting a list of unique city names visited by a given user |
 | GET | /users/:user/visits/states | Getting a list of unique state names visited by a given user |
-| GET | /streams/visits | Stream new visits using Server Sent Events |
+| GET | /stream/visits | Stream new visits using Server Sent Events |
 
 **Pagination**: Pagination is done via query parameters: "start" and "limit".
 
@@ -61,7 +61,6 @@ Since there are a great number of cities, the in-memory map (used with states) i
 * Maintain a source of truth of cities in the database & validate on each new visit request
 
 ### TODO
-* Write more test cases
-* Remove hardcoded list of states, and read from db on startup
 * Create Dockerfile
 * Create Kubernetes files
+* Possibly remove hardcoded list of states, and read from db on startup (slower startup time, better seperation of data/logic)

@@ -73,7 +73,7 @@ func New(conf Config) *Handler {
 	rtr.GET("/users/:user/visits/cities", h.wrap(h.GetCitiesVisited))
 	rtr.GET("/users/:user/visits/states", h.wrap(h.GetStatesVisited))
 	rtr.GET(
-		"/streams/visits",
+		"/stream/visits",
 		routeradapt.Adapt(streaming.ThenFunc(h.StreamVisits)),
 	)
 	h.router = rtr

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -95,7 +96,19 @@ func TestServer(t *testing.T) {
 		}
 	}
 
-	///////////////////////////////////////////////////////////////////////////
+	// TEST CASES:
+
+	// Start a streaming client.
+	var scanner *bufio.Scanner
+	var streamResp *http.Response
+	go func() {
+		var streamErr error
+		streamResp, streamErr = http.Get(server.URL + "/stream/visits")
+		checkErr("making http request", streamErr)
+		scanner = bufio.NewScanner(streamResp.Body)
+	}()
+
+	// Add a user visit.
 	resp, err := http.Post(
 		server.URL+"/users/testman/visits",
 		"application/json",
@@ -103,15 +116,17 @@ func TestServer(t *testing.T) {
 		// uppercase.
 		strings.NewReader(`{"city": "Raleigh", "state": "nc"}`),
 	)
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("POSTing a valid visit", resp, http.StatusOK)
-	///////////////////////////////////////////////////////////////////////////
+
+	// Add an empty user visit.
 	resp, err = http.Post(server.URL+"/users/testman/visits", "application/json", nil)
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("POSTing an empty visit", resp, http.StatusBadRequest)
-	///////////////////////////////////////////////////////////////////////////
+
+	// Get all user visits for a given user.
 	resp, err = http.Get(server.URL + "/users/testman/visits")
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("GETing a user visit", resp, http.StatusOK)
 	visitsBody := &struct {
 		Visits []visits.Visit `json:"visits"`
@@ -130,17 +145,19 @@ func TestServer(t *testing.T) {
 		t.Fatal("expected visit.state to be set to 'NC'")
 	}
 	raleighVisitId := visitsBody.Visits[0].ID
-	///////////////////////////////////////////////////////////////////////////
+
+	// Add another user visit.
 	resp, err = http.Post(
 		server.URL+"/users/testman/visits",
 		"application/json",
 		strings.NewReader(`{"city": "Charlotte", "state": "NC"}`),
 	)
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("POSTing a valid visit", resp, http.StatusOK)
-	///////////////////////////////////////////////////////////////////////////
+
+	// Get all state names visited by a user.
 	resp, err = http.Get(server.URL + "/users/testman/visits/states")
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("GETing the states a user visited", resp, http.StatusOK)
 	statesBody := &struct {
 		States []string `json:"states"`
@@ -149,9 +166,10 @@ func TestServer(t *testing.T) {
 	if len(statesBody.States) != 1 {
 		t.Fatal("expected exactly 1 unique state to be returned")
 	}
-	///////////////////////////////////////////////////////////////////////////
+
+	// Get all city names visited by a user.
 	resp, err = http.Get(server.URL + "/users/testman/visits/cities")
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("GETing the cities a user visited", resp, http.StatusOK)
 	citiesBody := &struct {
 		Cities []string `json:"cities"`
@@ -160,15 +178,17 @@ func TestServer(t *testing.T) {
 	if len(citiesBody.Cities) != 2 {
 		t.Fatal("expected exactly 2 unique cities to be returned")
 	}
-	///////////////////////////////////////////////////////////////////////////
+
+	// Delete a user visit.
 	req, err := http.NewRequest("DELETE", server.URL+"/users/testman/visits/"+raleighVisitId, nil)
-	checkErr("generating http request", err)
+	checkErr("making http request", err)
 	resp, err = http.DefaultClient.Do(req)
 	checkErr("failed to make http request", err)
 	checkStatus("DELETEing the Raleigh user visit", resp, http.StatusNoContent)
-	///////////////////////////////////////////////////////////////////////////
+
+	// Get all user visits for a given user after deleting one.
 	resp, err = http.Get(server.URL + "/users/testman/visits")
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("GETing a user visit", resp, http.StatusOK)
 	visitsBody = &struct {
 		Visits []visits.Visit `json:"visits"`
@@ -177,9 +197,30 @@ func TestServer(t *testing.T) {
 	if len(visitsBody.Visits) != 1 {
 		t.Fatal("expected exactly 1 visit to be returned")
 	}
-	///////////////////////////////////////////////////////////////////////////
+
+	// Make sure the 2 new visits were sent over the streaming endpoint.
+	i := 0
+	for scanner.Scan() {
+		text := scanner.Text()
+		if text == "" {
+			continue
+		}
+		text = text[len("data: "):]
+		v := &visits.Visit{}
+		checkErr("unmarshalling streamed visit json", json.Unmarshal([]byte(text), v))
+		if v.State == "NC" {
+			i++
+		} else {
+			t.Fatal("expected streamed visit.state = 'NC'")
+		}
+		if i == 2 {
+			break
+		}
+	}
+
+	// Get all cities in the state of NC.
 	resp, err = http.Get(server.URL + "/states/nc/cities")
-	checkErr("failed to make http request", err)
+	checkErr("making http request", err)
 	checkStatus("GETing a list of cities in a state", resp, http.StatusOK)
 	stateCitiesBody := &struct {
 		Cities []string `json:"cities"`

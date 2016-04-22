@@ -2,6 +2,38 @@
 
 This web service provides a REST api to allow users to pin areas they've visited and potentially share them with other users.
 
+### QUICK START
+The following should get you up and running on a linux environment.
+
+```sh
+# Install rethinkdb according to: https://www.rethinkdb.com/docs/install/
+# Run rethinkdb
+rethinkdb
+
+# Setup the repo (in a new shell)
+git clone https://github.com/nstogner/beenthere-ws.git
+cd beenthere-ws
+go test && go build
+
+# Setup db schema
+./beenthere-ws --init-db
+
+# Run the web service
+SERVER_PORT=4000 ./beenthere-ws
+```
+
+### CONFIGURATION
+Configuration is done via environment variables. This allows for easy container deployment.
+
+| Variable | Default | Description |
+|:---------|:--------|:------------|
+| SERVER_PORT | 8080 | Port to listen for http traffic |
+| DB_PORT | 28015 | Port to talk to database |
+| DB_HOST | localhost | Host to connect to database |
+| DB_NAME | been_there | Name of the "database" inside of the database |
+| VISITS_TABLE | visits | Table in which to store user visits |
+| CITIES_TABLE | cities | Table in which to store city info |
+
 ### ROUTES
 | Method | URL | Function |
 |:-------|:----|:---------|

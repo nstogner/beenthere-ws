@@ -11,8 +11,8 @@ The following should get you up and running on a linux environment.
 rethinkdb
 
 # Setup the repo (in a new shell)
-git clone https://github.com/nstogner/beenthere-ws.git
-cd beenthere-ws
+go get github.com/nstogner/beenthere-ws.git
+cd $GOPATH/src/github.com/nstogner/beenthere-ws
 go test && go build
 
 # Setup db schema

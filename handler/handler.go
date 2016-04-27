@@ -44,6 +44,7 @@ func New(conf Config) *Handler {
 
 	// Configure any needed middleware.
 	h.middleware = httpware.Compose(
+		httpware.DefaultErrHandler,
 		contentware.New(contentware.Defaults),
 		logware.New(logware.Config{
 			Logger:    h.logger,

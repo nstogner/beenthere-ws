@@ -47,10 +47,7 @@ func New(conf Config) *Handler {
 		httpware.DefaultErrHandler,
 		contentware.New(contentware.Defaults),
 		logware.New(logware.Config{
-			Logger:    h.logger,
-			Headers:   []string{},
-			Successes: true,
-			Failures:  true,
+			Logger: h.logger,
 		}),
 	)
 	paginated := h.middleware.With(

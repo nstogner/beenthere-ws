@@ -58,6 +58,8 @@ func TestServer(t *testing.T) {
 	server := httptest.NewServer(hdlr)
 
 	// Setup test db/tables.
+	// Drop the db in case the last test did not get the chance to cleanup...
+	r.DBDrop(conf.DBName).RunWrite(sess)
 	_, err = r.DBCreate(conf.DBName).RunWrite(sess)
 	checkErr("creating db", err)
 	_, err = r.TableCreate(conf.VisitsTable).RunWrite(sess)
@@ -118,11 +120,13 @@ func TestServer(t *testing.T) {
 	)
 	checkErr("making http request", err)
 	checkStatus("POSTing a valid visit", resp, http.StatusOK)
+	resp.Body.Close()
 
 	// Add an empty user visit.
 	resp, err = http.Post(server.URL+"/users/testman/visits", "application/json", nil)
 	checkErr("making http request", err)
 	checkStatus("POSTing an empty visit", resp, http.StatusBadRequest)
+	resp.Body.Close()
 
 	// Get all user visits for a given user.
 	resp, err = http.Get(server.URL + "/users/testman/visits")
@@ -144,7 +148,8 @@ func TestServer(t *testing.T) {
 	if visitsBody.Visits[0].State != "NC" {
 		t.Fatal("expected visit.state to be set to 'NC'")
 	}
-	raleighVisitId := visitsBody.Visits[0].ID
+	raleighVisitID := visitsBody.Visits[0].ID
+	resp.Body.Close()
 
 	// Add another user visit.
 	resp, err = http.Post(
@@ -154,6 +159,7 @@ func TestServer(t *testing.T) {
 	)
 	checkErr("making http request", err)
 	checkStatus("POSTing a valid visit", resp, http.StatusOK)
+	resp.Body.Close()
 
 	// Get all state names visited by a user.
 	resp, err = http.Get(server.URL + "/users/testman/visits/states")
@@ -166,6 +172,7 @@ func TestServer(t *testing.T) {
 	if len(statesBody.States) != 1 {
 		t.Fatal("expected exactly 1 unique state to be returned")
 	}
+	resp.Body.Close()
 
 	// Get all city names visited by a user.
 	resp, err = http.Get(server.URL + "/users/testman/visits/cities")
@@ -178,13 +185,15 @@ func TestServer(t *testing.T) {
 	if len(citiesBody.Cities) != 2 {
 		t.Fatal("expected exactly 2 unique cities to be returned")
 	}
+	resp.Body.Close()
 
 	// Delete a user visit.
-	req, err := http.NewRequest("DELETE", server.URL+"/users/testman/visits/"+raleighVisitId, nil)
+	req, err := http.NewRequest("DELETE", server.URL+"/users/testman/visits/"+raleighVisitID, nil)
 	checkErr("making http request", err)
 	resp, err = http.DefaultClient.Do(req)
 	checkErr("failed to make http request", err)
 	checkStatus("DELETEing the Raleigh user visit", resp, http.StatusNoContent)
+	resp.Body.Close()
 
 	// Get all user visits for a given user after deleting one.
 	resp, err = http.Get(server.URL + "/users/testman/visits")
@@ -197,6 +206,7 @@ func TestServer(t *testing.T) {
 	if len(visitsBody.Visits) != 1 {
 		t.Fatal("expected exactly 1 visit to be returned")
 	}
+	resp.Body.Close()
 
 	// Make sure the 2 new visits were sent over the streaming endpoint.
 	i := 0
@@ -217,6 +227,7 @@ func TestServer(t *testing.T) {
 			break
 		}
 	}
+	resp.Body.Close()
 
 	// Get all cities in the state of NC.
 	resp, err = http.Get(server.URL + "/states/nc/cities")
@@ -229,4 +240,5 @@ func TestServer(t *testing.T) {
 	if len(stateCitiesBody.Cities) != 2 {
 		t.Fatalf("expected exactly 2 cities to be returned, got %v", stateCitiesBody.Cities)
 	}
+	resp.Body.Close()
 }
